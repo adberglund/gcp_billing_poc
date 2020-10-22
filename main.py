@@ -8,7 +8,6 @@ from googleapiclient import discovery
 # BigQuery specifies the table name in the format projectID:dataset.tableID
 # To query we need to replace the : with a ,
 # i.e. projectID.dataset.tableID
-TABLE_NAME = ""
 
 
 def check_access(project):
@@ -19,7 +18,8 @@ def check_access(project):
     check_permissions = {
         "permissions": [
             "bigquery.jobs.create",
-            "bigquery.tables.getData"
+            "bigquery.tables.getData",
+            "bigquery.tables.list"
         ]
     }
 
@@ -30,11 +30,20 @@ def check_access(project):
     print(response)
 
 
-def query_table():
-    """Query BigQuery cost data and store in CSV."""
-    query_date = datetime.datetime.utcnow().date() - datetime.timedelta(days=3)
+def get_table_id(data_set):
+    """Get the billing table from a dataset in the format projectID.dataset"""
     client = bigquery.Client()
-    
+    for table in client.list_tables(data_set):
+        if "gcp_billing_export" in table.full_table_id:
+            return table.full_table_id
+    return None
+
+
+def query_table(table_id):
+    """Query BigQuery cost data and store in CSV."""
+    query_date = datetime.datetime.utcnow().date() - datetime.timedelta(days=600)
+    client = bigquery.Client()
+
     query = f"""
         SELECT billing_account_id,
             service.id,
@@ -64,7 +73,7 @@ def query_table():
             credits,
             invoice.month,
             cost_type
-        FROM {TABLE_NAME}
+        FROM {table_id}
         WHERE DATE(_PARTITIONTIME) >= '{query_date}'
     """
 
@@ -78,6 +87,6 @@ def query_table():
 
 if __name__ == "__main__":
     check_access("")
-    query_table()
-    
-    
+    table_id = get_table_id("")
+    query_table(table_id)
+
